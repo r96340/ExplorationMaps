@@ -21,8 +21,11 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapColorScheme;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.example.maps.databinding.ActivityMapsBinding;
+import com.google.android.gms.maps.model.Polygon;
+import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
@@ -195,5 +198,38 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         updateLocationUI();
         // Get the current location of the device and set the position of the map.
         getDeviceLocation();
+        // Turn off all default place labels.
+        String mapStyleJson = "[\n" +
+                "  {\n" +
+                "    \"featureType\": \"poi\",\n" +
+                "    \"elementType\": \"labels\",\n" +
+                "    \"stylers\": [\n" +
+                "      { \"visibility\": \"off\" }\n" +
+                "    ]\n" +
+                "  }\n" +
+                "]";
+
+        try {
+            boolean success = googleMap.setMapStyle(new MapStyleOptions(mapStyleJson));
+
+            if (!success) {
+                Log.e("MapStyle", "Style parsing failed.");
+            }
+        } catch (Exception e) {
+            Log.e("MapStyle", "Can't set map style. Error: ", e);
+        }
+        // Draw main mask polygon.
+        Polygon polygon1 = googleMap.addPolygon(new PolygonOptions()
+                .add(
+                        // Set to the boundaries of the island of Taiwan.
+                        new LatLng(25.299655, 120.035032),
+                        new LatLng(21.896799, 120.035032),
+                        new LatLng(21.896799, 122.007174),
+                        new LatLng(25.299655, 122.007174))
+                // Set it as opaquely black.
+                .fillColor(0xFF000000)
+        );
+        // Store a data object with the polygon, used here to indicate an arbitrary type.
+        polygon1.setTag("main_mask");
     }
 }
