@@ -265,13 +265,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         // Add a hole.
         hole = Arrays.asList(
-                // Generates initial area with points 0.001 lat. and long. away from the -
+                // Generates initial area with points 0.0003 lat. and long. away from the -
                 // - starting location. In this case:
                 // 25.026026, 121.538090
-                new LatLng(25.027026, 121.537090),
-                new LatLng(25.027026, 121.539090),
-                new LatLng(25.025026, 121.539090),
-                new LatLng(25.025026, 121.537090)
+                new LatLng(25.026326, 121.537790),
+                new LatLng(25.026326, 121.538390),
+                new LatLng(25.025726, 121.538390),
+                new LatLng(25.025726, 121.537790)
         );
         saveHoleToFile(hole);
         // Draw main mask polygon.
