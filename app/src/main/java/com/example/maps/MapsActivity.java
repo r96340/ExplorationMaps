@@ -40,6 +40,11 @@ import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.android.material.snackbar.Snackbar;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -186,16 +191,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             // Set the map's camera position to the current location of the device.
                             lastKnownLocation = task.getResult();
                             if (lastKnownLocation != null) {
-                                if (lastKnownLocation.getLongitude() < 121.539090) {
-                                    Toast.makeText(MapsActivity.this,
-                                            "Longitude safe",
-                                            Toast.LENGTH_LONG).show();
-                                }
-                                if (lastKnownLocation.getLongitude() > 121.539090) {
-                                    Toast.makeText(MapsActivity.this,
-                                            "Longitude exceeds 121.539090!",
-                                            Toast.LENGTH_LONG).show();
-                                }
+                                updatePolygons();
                                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                         new LatLng(lastKnownLocation.getLatitude(),
                                                 lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
@@ -277,6 +273,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 new LatLng(25.025026, 121.539090),
                 new LatLng(25.025026, 121.537090)
         );
+        saveHoleToFile(hole);
         // Draw main mask polygon.
         main_mask = googleMap.addPolygon(new PolygonOptions()
                 .add(
@@ -312,33 +309,76 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 throw new RuntimeException(e);
             }
         }
+    }
 
-        binding.button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (main_mask != null) {
-                    // Edit the hole
-                    List<LatLng> trimmedHole = new ArrayList<>(hole.subList(0, 3));
-                    hole = trimmedHole;
+    public void updatePolygons(){
+        if (lastKnownLocation.getLongitude() > 121.539090) {
+            Toast.makeText(MapsActivity.this,
+                    "Longitude exceeds 121.539090!",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
 
-                    // Remove old polygon
-                    main_mask.remove();
+    private void saveHoleToFile(List<LatLng> hole) {
+        StringBuilder data = new StringBuilder();
+        for (LatLng point : hole) {
+            data.append(point.latitude).append(",").append(point.longitude).append("\n");
+        }
+        try {
+            // Use internal storage
+            File file = new File(getFilesDir(), "hole_coordinates");
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(data.toString().getBytes());
+            fos.close();
+            Log.i(TAG, "Hole coordinates saved to " + file.getAbsolutePath());
+        } catch (IOException e) {
+            Log.e(TAG, "Error saving hole coordinates", e);
+        }
+    }
 
-                    // Re-add polygon with updated hole
-                    main_mask = map.addPolygon(new PolygonOptions()
-                            .add(
-                                    new LatLng(25.299655, 120.035032),
-                                    new LatLng(21.896799, 120.035032),
-                                    new LatLng(21.896799, 122.007174),
-                                    new LatLng(25.299655, 122.007174)
-                            )
-                            .fillColor(0xFF00102E)
-                            .strokeWidth(0)
-                            .addHole(hole)
-                    );
+    private List<LatLng> readHoleFromFile() {
+        List<LatLng> result = new ArrayList<>();
+        try {
+            File file = new File(getFilesDir(), "hole_coordinates");
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 2) {
+                    double lat = Double.parseDouble(parts[0]);
+                    double lng = Double.parseDouble(parts[1]);
+                    result.add(new LatLng(lat, lng));
                 }
             }
-        });
+            reader.close();
+        } catch (IOException e) {
+            Log.e(TAG, "Error reading hole coordinates", e);
+        }
+        return result;
+    }
 
+
+    private void editHole(){
+        if (main_mask != null) {
+            // Edit the hole
+            List<LatLng> trimmedHole = new ArrayList<>(hole.subList(0, 3));
+            hole = trimmedHole;
+
+            // Remove old polygon
+            main_mask.remove();
+
+            // Re-add polygon with updated hole
+            main_mask = map.addPolygon(new PolygonOptions()
+                    .add(
+                            new LatLng(25.299655, 120.035032),
+                            new LatLng(21.896799, 120.035032),
+                            new LatLng(21.896799, 122.007174),
+                            new LatLng(25.299655, 122.007174)
+                    )
+                    .fillColor(0xFF00102E)
+                    .strokeWidth(0)
+                    .addHole(readHoleFromFile())
+            );
+        }
     }
 }
