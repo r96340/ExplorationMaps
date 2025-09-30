@@ -1,5 +1,7 @@
 package com.example.maps;
 
+import static com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -13,8 +15,12 @@ import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Log;
 import android.view.View;
+import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -43,6 +49,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private GoogleMap map;
     private ActivityMapsBinding binding;
+    private LocationCallback locationCallback;
     private PlacesClient placesClient;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private boolean locationPermissionGranted;
@@ -82,6 +89,30 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         // Prompt the user for permission.
         getLocationPermission();
+
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) {
+                    return;
+                }
+                for (Location location : locationResult.getLocations()) {
+                    lastKnownLocation = location;
+                    double lon = location.getLongitude();
+                    if (lon < 121.539090) {
+                        Toast.makeText(MapsActivity.this,
+                                "Longitude safe",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                    if (lon > 121.539090) {
+                        Toast.makeText(MapsActivity.this,
+                                "Longitude exceeds 121.539090!",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        };
+
     }
 
     /**
@@ -155,6 +186,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             // Set the map's camera position to the current location of the device.
                             lastKnownLocation = task.getResult();
                             if (lastKnownLocation != null) {
+                                if (lastKnownLocation.getLongitude() < 121.539090) {
+                                    Toast.makeText(MapsActivity.this,
+                                            "Longitude safe",
+                                            Toast.LENGTH_LONG).show();
+                                }
+                                if (lastKnownLocation.getLongitude() > 121.539090) {
+                                    Toast.makeText(MapsActivity.this,
+                                            "Longitude exceeds 121.539090!",
+                                            Toast.LENGTH_LONG).show();
+                                }
                                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                         new LatLng(lastKnownLocation.getLatitude(),
                                                 lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
@@ -228,6 +269,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         // Add a hole.
         hole = Arrays.asList(
+                // Generates initial area with points 0.001 lat. and long. away from the -
+                // - starting location. In this case:
                 // 25.026026, 121.538090
                 new LatLng(25.027026, 121.537090),
                 new LatLng(25.027026, 121.539090),
@@ -247,6 +290,28 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .strokeWidth(0)
                 .addHole(hole)
         );
+
+        // Set default zoom when MyLocation button is clicked.
+        map.setOnMyLocationButtonClickListener(() -> {
+            getDeviceLocation();
+            return true; // Return true to consume the event.
+        });
+
+        if (locationPermissionGranted) {
+            LocationRequest locationRequest = LocationRequest.create();
+            locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+            locationRequest.setInterval(5000); // 5 seconds
+            locationRequest.setFastestInterval(2000); // Optional: limit how fast updates can come
+            try{
+                fusedLocationProviderClient.requestLocationUpdates(
+                        locationRequest,
+                        locationCallback,
+                        null // Use main looper
+                );
+            } catch (SecurityException e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         binding.button.setOnClickListener(new View.OnClickListener() {
             @Override
