@@ -6,11 +6,13 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Log;
+import android.view.View;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
@@ -30,6 +32,11 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.net.PlacesClient;
+import com.google.android.material.snackbar.Snackbar;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback {
@@ -44,6 +51,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private CameraPosition cameraPosition;
     private static final String KEY_CAMERA_POSITION = "camera_position";
     private static final String KEY_LOCATION = "location";
+    private Polygon main_mask;
+    private List<LatLng> hole;
 
     //Customizable configurations
     private static final String TAG = MapsActivity.class.getSimpleName();
@@ -208,7 +217,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 "    ]\n" +
                 "  }\n" +
                 "]";
-
         try {
             boolean success = googleMap.setMapStyle(new MapStyleOptions(mapStyleJson));
 
@@ -218,18 +226,54 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         } catch (Exception e) {
             Log.e("MapStyle", "Can't set map style. Error: ", e);
         }
+        // Add a hole.
+        hole = Arrays.asList(
+                // 25.026026, 121.538090
+                new LatLng(25.027026, 121.537090),
+                new LatLng(25.027026, 121.539090),
+                new LatLng(25.025026, 121.539090),
+                new LatLng(25.025026, 121.537090)
+        );
         // Draw main mask polygon.
-        Polygon polygon1 = googleMap.addPolygon(new PolygonOptions()
+        main_mask = googleMap.addPolygon(new PolygonOptions()
                 .add(
                         // Set to the boundaries of the island of Taiwan.
                         new LatLng(25.299655, 120.035032),
                         new LatLng(21.896799, 120.035032),
                         new LatLng(21.896799, 122.007174),
                         new LatLng(25.299655, 122.007174))
-                // Set it as opaquely black.
-                .fillColor(0xFF000000)
+                // Set it as opaquely deep blue, same as the color of the ocean in dark mode.
+                .fillColor(0xFF00102E)
+                .strokeWidth(0)
+                .addHole(hole)
         );
-        // Store a data object with the polygon, used here to indicate an arbitrary type.
-        polygon1.setTag("main_mask");
+
+        binding.button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (main_mask != null) {
+                    // Edit the hole
+                    List<LatLng> trimmedHole = new ArrayList<>(hole.subList(0, 3));
+                    hole = trimmedHole;
+
+                    // Remove old polygon
+                    main_mask.remove();
+
+                    // Re-add polygon with updated hole
+                    main_mask = map.addPolygon(new PolygonOptions()
+                            .add(
+                                    new LatLng(25.299655, 120.035032),
+                                    new LatLng(21.896799, 120.035032),
+                                    new LatLng(21.896799, 122.007174),
+                                    new LatLng(25.299655, 122.007174)
+                            )
+                            .fillColor(0xFF00102E)
+                            .strokeWidth(0)
+                            .addHole(hole)
+                    );
+                }
+            }
+        });
+
     }
 }
