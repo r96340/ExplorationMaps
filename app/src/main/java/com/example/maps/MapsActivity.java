@@ -1,5 +1,7 @@
 package com.example.maps;
 
+import static java.lang.Math.abs;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -58,6 +60,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private List<LatLng> hole;
     private boolean isMapReady = false;
     private boolean isLocationReady = false;
+    private double originLatitude;
+    private double originLongitude;
 
     //Customizable configurations
     private static final String TAG = MapsActivity.class.getSimpleName();
@@ -268,7 +272,29 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
 
         // Initialize map and add known holes
+        File file = new File(getFilesDir(), "hole_coordinates");
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
         refreshHoles();
+        // Set origin point
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line = reader.readLine();  // Read the first line only
+            if (line != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 2) {
+                    originLatitude = Double.parseDouble(parts[0].trim());
+                    originLongitude = Double.parseDouble(parts[1].trim());
+                }
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error reading first hole coordinate", e);
+        }
+
         // Set default zoom when MyLocation button is clicked.
         map.setOnMyLocationButtonClickListener(() -> {
             getDeviceLocation();
@@ -349,12 +375,20 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     public void makeHoleFromCenter(double lat, double lon){
-        hole = Arrays.asList(
-                new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
-                new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
-                new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
-                new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
-        );
+        double deltaLat = abs(lat-originLatitude);
+        double deltaLon = abs(lon-originLongitude);
+        if(deltaLat > 0.0006){
+
+        } else if(deltaLon > 0.0006){
+
+        } else {
+            hole = Arrays.asList(
+                    new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
+                    new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
+                    new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
+                    new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
+            );
+        }
     }
 
     public boolean checkOutside(double lat, double lon) {
@@ -372,8 +406,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     double holeLat = Double.parseDouble(parts[0]);
                     double holeLon = Double.parseDouble(parts[1]);
 
-                    double latDiff = Math.abs(lat - holeLat);
-                    double lonDiff = Math.abs(lon - holeLon);
+                    double latDiff = abs(lat - holeLat);
+                    double lonDiff = abs(lon - holeLon);
 
                     if (latDiff <= SHOW_RADIUS && lonDiff <= SHOW_RADIUS) {
                         // Inside one of the holes
