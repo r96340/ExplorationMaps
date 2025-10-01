@@ -298,14 +298,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     public void initializePolygon(double lat, double lon){
-        // Add a hole.
-        hole = Arrays.asList(
-                new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
-                new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
-                new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
-                new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
-        );
-        saveHoleToFile(hole);
+        // Make a hole.
+        makeHoleFromCenter(lat, lon);
         // Redraw main mask polygon.
         if(main_mask != null){
             main_mask.remove();
@@ -324,6 +318,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         );
     }
 
+    public void makeHoleFromCenter(double lat, double lon){
+        hole = Arrays.asList(
+                new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
+                new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
+                new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
+                new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
+        );
+        saveHoleToFile(lat, lon);
+    }
+
     public void checkOutside(){
         if (lastKnownLocation.getLongitude() > 121.539090) {
             Toast.makeText(MapsActivity.this,
@@ -332,15 +336,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void saveHoleToFile(List<LatLng> hole) {
+    // This saves the centers of already opened holes to a file.
+    private void saveHoleToFile(double lat, double lon) {
         StringBuilder data = new StringBuilder();
-        for (LatLng point : hole) {
-            data.append(point.latitude).append(",").append(point.longitude).append("\n");
-        }
+        data.append(lat).append(",").append(lon).append("\n");
         try {
             // Use internal storage
             File file = new File(getFilesDir(), "hole_coordinates");
-            FileOutputStream fos = new FileOutputStream(file);
+            FileOutputStream fos = new FileOutputStream(file, true);
             fos.write(data.toString().getBytes());
             fos.close();
             Log.i(TAG, "Hole coordinates saved to " + file.getAbsolutePath());
