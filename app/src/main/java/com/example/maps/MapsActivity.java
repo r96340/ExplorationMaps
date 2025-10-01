@@ -189,6 +189,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                         new LatLng(lastKnownLocation.getLatitude(),
                                                 lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
+                                initializePolygon(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
                             }
                         } else {
                             Log.d(TAG, "Current location is null. Using defaults.");
@@ -258,7 +259,20 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.e("MapStyle", "Can't set map style. Error: ", e);
         }
 
-        initializePolygon(25.026026, 121.538090);
+        //Initialize the full main mask (without hole) everytime the map opens.
+        main_mask = map.addPolygon(new PolygonOptions()
+                .add(
+                        // Set to the boundaries of the island of Taiwan.
+                        new LatLng(25.299655, 120.035032),
+                        new LatLng(21.896799, 120.035032),
+                        new LatLng(21.896799, 122.007174),
+                        new LatLng(25.299655, 122.007174))
+                // Set it as opaquely deep blue, same as the color of the ocean in dark mode.
+                .fillColor(0xFF00102E)
+                .strokeWidth(0)
+        );
+
+        //Edit the hole according to data read from the user directory afterwards.
 
         // Set default zoom when MyLocation button is clicked.
         map.setOnMyLocationButtonClickListener(() -> {
@@ -292,7 +306,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
         );
         saveHoleToFile(hole);
-        // Draw main mask polygon.
+        // Redraw main mask polygon.
+        if(main_mask != null){
+            main_mask.remove();
+        }
         main_mask = map.addPolygon(new PolygonOptions()
                 .add(
                         // Set to the boundaries of the island of Taiwan.
