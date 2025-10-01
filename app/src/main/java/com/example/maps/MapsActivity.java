@@ -233,10 +233,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         updateLocationUI();
         getDeviceLocation();
-        if(checkOutside(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude())){
-            addNewHoles(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
-            makeToast("onRequestPermissionsResult adds a new hole.");
-        }
     }
 
     /**
@@ -312,6 +308,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .fillColor(0xFF00102E)
                 .strokeWidth(0);
         // Add all hole rings
+
         List<List<LatLng>> holes = readHolesFromFile();
         for (List<LatLng> hole : holes) {
             polygonOptions.addHole(hole);
@@ -387,17 +384,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
 
             reader.close();
-
-            if (isOutside) {
-                Toast.makeText(MapsActivity.this,
-                        "Currently outside a hole.",
-                        Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(MapsActivity.this,
-                        "Currently inside a hole.",
-                        Toast.LENGTH_LONG).show();
-            }
-
             return isOutside;
 
         } catch (IOException e) {
