@@ -185,11 +185,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             // Set the map's camera position to the current location of the device.
                             lastKnownLocation = task.getResult();
                             if (lastKnownLocation != null) {
-                                updatePolygons();
+                                initializePolygon(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+                                checkOutside();
                                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                         new LatLng(lastKnownLocation.getLatitude(),
                                                 lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
-                                initializePolygon(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
                             }
                         } else {
                             Log.d(TAG, "Current location is null. Using defaults.");
@@ -324,7 +324,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         );
     }
 
-    public void updatePolygons(){
+    public void checkOutside(){
         if (lastKnownLocation.getLongitude() > 121.539090) {
             Toast.makeText(MapsActivity.this,
                     "Longitude exceeds 121.539090!",
