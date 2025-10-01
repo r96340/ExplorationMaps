@@ -259,21 +259,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.e("MapStyle", "Can't set map style. Error: ", e);
         }
 
-        //Initialize the full main mask (without hole) everytime the map opens.
-        main_mask = map.addPolygon(new PolygonOptions()
-                .add(
-                        // Set to the boundaries of the island of Taiwan.
-                        new LatLng(25.299655, 120.035032),
-                        new LatLng(21.896799, 120.035032),
-                        new LatLng(21.896799, 122.007174),
-                        new LatLng(25.299655, 122.007174))
-                // Set it as opaquely deep blue, same as the color of the ocean in dark mode.
-                .fillColor(0xFF00102E)
-                .strokeWidth(0)
-        );
-
-        //Edit the hole according to data read from the user directory afterwards.
-
         // Set default zoom when MyLocation button is clicked.
         map.setOnMyLocationButtonClickListener(() -> {
             getDeviceLocation();
@@ -298,24 +283,32 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     public void initializePolygon(double lat, double lon){
-        // Make a hole.
+        // Save new hole
         makeHoleFromCenter(lat, lon);
-        // Redraw main mask polygon.
-        if(main_mask != null){
+
+        // Remove previous polygon
+        if (main_mask != null) {
             main_mask.remove();
         }
-        main_mask = map.addPolygon(new PolygonOptions()
+
+        // Build the base polygon (Taiwan boundary)
+        PolygonOptions polygonOptions = new PolygonOptions()
                 .add(
-                        // Set to the boundaries of the island of Taiwan.
                         new LatLng(25.299655, 120.035032),
                         new LatLng(21.896799, 120.035032),
                         new LatLng(21.896799, 122.007174),
                         new LatLng(25.299655, 122.007174))
-                // Set it as opaquely deep blue, same as the color of the ocean in dark mode.
                 .fillColor(0xFF00102E)
-                .strokeWidth(0)
-                .addHole(hole)
-        );
+                .strokeWidth(0);
+
+        // Add all hole rings
+        List<List<LatLng>> holes = readHolesFromFile();
+        for (List<LatLng> hole : holes) {
+            polygonOptions.addHole(hole);
+        }
+
+        // Create the polygon with holes
+        main_mask = map.addPolygon(polygonOptions);
     }
 
     public void makeHoleFromCenter(double lat, double lon){
@@ -352,8 +345,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private List<LatLng> readHoleFromFile() {
-        List<LatLng> result = new ArrayList<>();
+    private List<List<LatLng>> readHolesFromFile() {
+        List<List<LatLng>> holeRings = new ArrayList<>();
         try {
             File file = new File(getFilesDir(), "hole_coordinates");
             BufferedReader reader = new BufferedReader(new FileReader(file));
@@ -362,39 +355,23 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 String[] parts = line.split(",");
                 if (parts.length == 2) {
                     double lat = Double.parseDouble(parts[0]);
-                    double lng = Double.parseDouble(parts[1]);
-                    result.add(new LatLng(lat, lng));
+                    double lon = Double.parseDouble(parts[1]);
+
+                    // Create a square ring (hole) around the center point
+                    List<LatLng> hole = Arrays.asList(
+                            new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
+                            new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
+                            new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
+                            new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
+                    );
+
+                    holeRings.add(hole);
                 }
             }
             reader.close();
         } catch (IOException e) {
             Log.e(TAG, "Error reading hole coordinates", e);
         }
-        return result;
-    }
-
-
-    private void editHole(){
-        if (main_mask != null) {
-            // Edit the hole
-            List<LatLng> trimmedHole = new ArrayList<>(hole.subList(0, 3));
-            hole = trimmedHole;
-
-            // Remove old polygon
-            main_mask.remove();
-
-            // Re-add polygon with updated hole
-            main_mask = map.addPolygon(new PolygonOptions()
-                    .add(
-                            new LatLng(25.299655, 120.035032),
-                            new LatLng(21.896799, 120.035032),
-                            new LatLng(21.896799, 122.007174),
-                            new LatLng(25.299655, 122.007174)
-                    )
-                    .fillColor(0xFF00102E)
-                    .strokeWidth(0)
-                    .addHole(readHoleFromFile())
-            );
-        }
+        return holeRings;
     }
 }
