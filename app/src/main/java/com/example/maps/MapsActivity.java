@@ -1,20 +1,14 @@
 package com.example.maps;
 
-import static com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import android.Manifest;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
-import android.os.Parcelable;
 import android.util.Log;
-import android.view.View;
 import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -30,15 +24,12 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapColorScheme;
 import com.google.android.gms.maps.model.MapStyleOptions;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.example.maps.databinding.ActivityMapsBinding;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
-import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.net.PlacesClient;
-import com.google.android.material.snackbar.Snackbar;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -65,11 +56,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final String KEY_LOCATION = "location";
     private Polygon main_mask;
     private List<LatLng> hole;
+    private boolean isMapReady = false;
+    private boolean isLocationReady = false;
 
     //Customizable configurations
     private static final String TAG = MapsActivity.class.getSimpleName();
     private static final int DEFAULT_ZOOM = 18;
-    private final LatLng defaultLocation = new LatLng(25.0260079, 121.5381223);
+    private final LatLng DEFAULT_LOCATION = new LatLng(25.0260079, 121.5381223);
+    private final double SHOW_RADIUS = 0.0003;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -200,7 +194,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             Log.d(TAG, "Current location is null. Using defaults.");
                             Log.e(TAG, "Exception: %s", task.getException());
                             map.moveCamera(CameraUpdateFactory
-                                    .newLatLngZoom(defaultLocation, DEFAULT_ZOOM));
+                                    .newLatLngZoom(DEFAULT_LOCATION, DEFAULT_ZOOM));
                             map.getUiSettings().setMyLocationButtonEnabled(false);
                         }
                     }
@@ -263,30 +257,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         } catch (Exception e) {
             Log.e("MapStyle", "Can't set map style. Error: ", e);
         }
-        // Add a hole.
-        hole = Arrays.asList(
-                // Generates initial area with points 0.0003 lat. and long. away from the -
-                // - starting location. In this case:
-                // 25.026026, 121.538090
-                new LatLng(25.026326, 121.537790),
-                new LatLng(25.026326, 121.538390),
-                new LatLng(25.025726, 121.538390),
-                new LatLng(25.025726, 121.537790)
-        );
-        saveHoleToFile(hole);
-        // Draw main mask polygon.
-        main_mask = googleMap.addPolygon(new PolygonOptions()
-                .add(
-                        // Set to the boundaries of the island of Taiwan.
-                        new LatLng(25.299655, 120.035032),
-                        new LatLng(21.896799, 120.035032),
-                        new LatLng(21.896799, 122.007174),
-                        new LatLng(25.299655, 122.007174))
-                // Set it as opaquely deep blue, same as the color of the ocean in dark mode.
-                .fillColor(0xFF00102E)
-                .strokeWidth(0)
-                .addHole(hole)
-        );
+
+        initializePolygon(25.026026, 121.538090);
 
         // Set default zoom when MyLocation button is clicked.
         map.setOnMyLocationButtonClickListener(() -> {
@@ -309,6 +281,30 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    public void initializePolygon(double lat, double lon){
+        // Add a hole.
+        hole = Arrays.asList(
+                new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
+                new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
+                new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
+                new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
+        );
+        saveHoleToFile(hole);
+        // Draw main mask polygon.
+        main_mask = map.addPolygon(new PolygonOptions()
+                .add(
+                        // Set to the boundaries of the island of Taiwan.
+                        new LatLng(25.299655, 120.035032),
+                        new LatLng(21.896799, 120.035032),
+                        new LatLng(21.896799, 122.007174),
+                        new LatLng(25.299655, 122.007174))
+                // Set it as opaquely deep blue, same as the color of the ocean in dark mode.
+                .fillColor(0xFF00102E)
+                .strokeWidth(0)
+                .addHole(hole)
+        );
     }
 
     public void updatePolygons(){
