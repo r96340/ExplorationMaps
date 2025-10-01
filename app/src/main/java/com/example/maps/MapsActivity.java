@@ -96,22 +96,19 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     return;
                 }
                 for (Location location : locationResult.getLocations()) {
-                    lastKnownLocation = location;
-                    double lon = location.getLongitude();
-                    if (lon < 121.539090) {
-                        Toast.makeText(MapsActivity.this,
-                                "Longitude safe",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                    if (lon > 121.539090) {
-                        Toast.makeText(MapsActivity.this,
-                                "Longitude exceeds 121.539090!",
-                                Toast.LENGTH_SHORT).show();
+                    if (location != null) {
+                        lastKnownLocation = location;
+                        double lat = location.getLatitude();
+                        double lon = location.getLongitude();
+
+                        if (checkOutside(lat, lon)) {
+                            makeToast("Location callback adds a new hole.");
+                            addNewHoles(lat, lon);
+                        }
                     }
                 }
             }
         };
-
     }
 
     /**
@@ -145,6 +142,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
                     PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
+    }
+
+    private void makeToast(String text){
+        Toast.makeText(MapsActivity.this,
+                text,
+                Toast.LENGTH_LONG).show();
     }
 
     /**
@@ -185,8 +188,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             // Set the map's camera position to the current location of the device.
                             lastKnownLocation = task.getResult();
                             if (lastKnownLocation != null) {
-                                initializePolygon(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
-                                checkOutside();
+                                Toast.makeText(MapsActivity.this,
+                                        "Location service running",
+                                        Toast.LENGTH_LONG).show();
+                                if(checkOutside(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude())){
+                                    addNewHoles(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+                                    makeToast("getDeviceLocation adds a new hole.");
+                                }
                                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                         new LatLng(lastKnownLocation.getLatitude(),
                                                 lastKnownLocation.getLongitude()), DEFAULT_ZOOM));
@@ -225,6 +233,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         updateLocationUI();
         getDeviceLocation();
+        if(checkOutside(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude())){
+            addNewHoles(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
+            makeToast("onRequestPermissionsResult adds a new hole.");
+        }
     }
 
     /**
@@ -259,6 +271,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.e("MapStyle", "Can't set map style. Error: ", e);
         }
 
+        // Initialize map and add known holes
+        refreshHoles();
         // Set default zoom when MyLocation button is clicked.
         map.setOnMyLocationButtonClickListener(() -> {
             getDeviceLocation();
@@ -282,9 +296,36 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    public void initializePolygon(double lat, double lon){
-        // Save new hole
+    public void refreshHoles(){
+        // Remove previous polygon
+        if (main_mask != null) {
+            main_mask.remove();
+        }
+
+        // Build the base polygon (Taiwan boundary)
+        PolygonOptions polygonOptions = new PolygonOptions()
+                .add(
+                        new LatLng(25.299655, 120.035032),
+                        new LatLng(21.896799, 120.035032),
+                        new LatLng(21.896799, 122.007174),
+                        new LatLng(25.299655, 122.007174))
+                .fillColor(0xFF00102E)
+                .strokeWidth(0);
+        // Add all hole rings
+        List<List<LatLng>> holes = readHolesFromFile();
+        for (List<LatLng> hole : holes) {
+            polygonOptions.addHole(hole);
+        }
+
+        // Create the polygon with holes
+        main_mask = map.addPolygon(polygonOptions);
+    }
+
+    public void addNewHoles(double lat, double lon){
+        // Make new hole.
         makeHoleFromCenter(lat, lon);
+        // Save new hole.
+        saveHoleToFile(lat, lon);
 
         // Remove previous polygon
         if (main_mask != null) {
@@ -300,7 +341,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         new LatLng(25.299655, 122.007174))
                 .fillColor(0xFF00102E)
                 .strokeWidth(0);
-
         // Add all hole rings
         List<List<LatLng>> holes = readHolesFromFile();
         for (List<LatLng> hole : holes) {
@@ -318,14 +358,51 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
                 new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
         );
-        saveHoleToFile(lat, lon);
     }
 
-    public void checkOutside(){
-        if (lastKnownLocation.getLongitude() > 121.539090) {
-            Toast.makeText(MapsActivity.this,
-                    "Longitude exceeds 121.539090!",
-                    Toast.LENGTH_LONG).show();
+    public boolean checkOutside(double lat, double lon) {
+        try {
+            File file = new File(getFilesDir(), "hole_coordinates");
+            boolean isOutside = true;
+            if (!file.exists()) return true;
+
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 2) {
+                    double holeLat = Double.parseDouble(parts[0]);
+                    double holeLon = Double.parseDouble(parts[1]);
+
+                    double latDiff = Math.abs(lat - holeLat);
+                    double lonDiff = Math.abs(lon - holeLon);
+
+                    if (latDiff <= SHOW_RADIUS && lonDiff <= SHOW_RADIUS) {
+                        // Inside one of the holes
+                        isOutside = false;
+                        break;
+                    }
+                }
+            }
+
+            reader.close();
+
+            if (isOutside) {
+                Toast.makeText(MapsActivity.this,
+                        "Currently outside a hole.",
+                        Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(MapsActivity.this,
+                        "Currently inside a hole.",
+                        Toast.LENGTH_LONG).show();
+            }
+
+            return isOutside;
+
+        } catch (IOException e) {
+            Log.e(TAG, "Error checking location against holes", e);
+            return false;
         }
     }
 
