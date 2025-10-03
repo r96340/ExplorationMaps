@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.Bundle;
@@ -67,7 +68,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final String TAG = MapsActivity.class.getSimpleName();
     private static final int DEFAULT_ZOOM = 18;
     private final LatLng DEFAULT_LOCATION = new LatLng(25.0260079, 121.5381223);
-    private final double SHOW_RADIUS = 0.0003;
+    private final double SHOW_RADIUS = 0.0002;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -281,20 +282,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
         refreshHoles();
-        // Set origin point
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            String line = reader.readLine();  // Read the first line only
-            if (line != null) {
-                String[] parts = line.split(",");
-                if (parts.length == 2) {
-                    originLatitude = Double.parseDouble(parts[0].trim());
-                    originLongitude = Double.parseDouble(parts[1].trim());
-                }
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Error reading first hole coordinate", e);
-        }
-
         // Set default zoom when MyLocation button is clicked.
         map.setOnMyLocationButtonClickListener(() -> {
             getDeviceLocation();
@@ -346,9 +333,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     public void addNewHoles(double lat, double lon){
         // Make new hole.
-        makeHoleFromCenter(lat, lon);
-        // Save new hole.
-        saveHoleToFile(lat, lon);
+        // Use SharedPreferences to track first run
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        boolean isFirstRun = prefs.getBoolean("is_first_run", true);
+
+        if (isFirstRun) {
+            makeHoleFromCenter(lat, lon);
+            prefs.edit().putBoolean("is_first_run", false).apply();  // Mark as not first run anymore
+        } else {
+            makeHoleFromEdges(lat, lon);
+        }
 
         // Remove previous polygon
         if (main_mask != null) {
@@ -375,20 +369,84 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     public void makeHoleFromCenter(double lat, double lon){
-        double deltaLat = abs(lat-originLatitude);
-        double deltaLon = abs(lon-originLongitude);
-        if(deltaLat > 0.0006){
-
-        } else if(deltaLon > 0.0006){
-
-        } else {
-            hole = Arrays.asList(
+        hole = Arrays.asList(
                     new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
                     new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
                     new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
                     new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
             );
+        // Save new hole.
+        saveHoleToFile(lat, lon);
+        originLatitude = lat;
+        originLongitude = lon;
+        try {
+            File file = new File(getFilesDir(), "hole_coordinates");
+            if (file.exists()) {
+                BufferedReader reader = new BufferedReader(new FileReader(file));
+                List<String> lines = new ArrayList<>();
+                String line;
+                boolean isFirstLine = true;
+                while ((line = reader.readLine()) != null) {
+                    if (isFirstLine) {
+                        isFirstLine = false; // Skip first line
+                        continue;
+                    }
+                    lines.add(line);
+                }
+                reader.close();
+
+                // Overwrite the file with remaining lines
+                FileOutputStream fos = new FileOutputStream(file, false); // false = overwrite
+                for (String remainingLine : lines) {
+                    fos.write((remainingLine + "\n").getBytes());
+                }
+                fos.close();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error removing first line from hole_coordinates", e);
         }
+    }
+
+    public void makeHoleFromEdges(double lat, double lon){
+        double resultLat = originLatitude;
+        double resultLon = originLongitude;
+        double deltaLat = lat - originLatitude;
+        double deltaLon = lon - originLongitude;
+        if(deltaLat > 0){
+            if(Math.ceil(deltaLat/SHOW_RADIUS) % 2 == 0){
+                resultLat = originLatitude + SHOW_RADIUS * Math.ceil(deltaLat/SHOW_RADIUS);
+            } else{
+                resultLat = originLatitude + SHOW_RADIUS * Math.floor(deltaLat/SHOW_RADIUS);
+            }
+        } else if(deltaLat < 0){
+            if(Math.ceil(deltaLat/SHOW_RADIUS) % 2 == 0){
+                resultLat = originLatitude + SHOW_RADIUS * Math.floor(deltaLat/SHOW_RADIUS);
+            } else{
+                resultLat = originLatitude + SHOW_RADIUS * Math.ceil(deltaLat/SHOW_RADIUS);
+            }
+        }
+        if(deltaLon > 0){
+            if(Math.ceil(deltaLon/SHOW_RADIUS) % 2 == 0){
+                resultLon = originLongitude + SHOW_RADIUS * Math.ceil(deltaLon/SHOW_RADIUS);
+            } else{
+                resultLon = originLongitude + SHOW_RADIUS * Math.floor(deltaLon/SHOW_RADIUS);
+            }
+        } else if(deltaLon < 0){
+            if(Math.ceil(deltaLon/SHOW_RADIUS) % 2 == 0){
+                resultLon = originLongitude + SHOW_RADIUS * Math.floor(deltaLon/SHOW_RADIUS);
+            } else{
+                resultLon = originLongitude + SHOW_RADIUS * Math.ceil(deltaLon/SHOW_RADIUS);
+            }
+        }
+        hole = Arrays.asList(
+                new LatLng(resultLat + SHOW_RADIUS, resultLon - SHOW_RADIUS),
+                new LatLng(resultLat + SHOW_RADIUS, resultLon + SHOW_RADIUS),
+                new LatLng(resultLat - SHOW_RADIUS, resultLon + SHOW_RADIUS),
+                new LatLng(resultLat - SHOW_RADIUS, resultLon - SHOW_RADIUS)
+        );
+        // Save new hole.
+        makeToast("Made hole at " + resultLat + ", " + resultLon);
+        saveHoleToFile(resultLat, resultLon);
     }
 
     public boolean checkOutside(double lat, double lon) {
