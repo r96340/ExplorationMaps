@@ -49,7 +49,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private GoogleMap map;
     private ActivityMapsBinding binding;
     private LocationCallback locationCallback;
-    private PlacesClient placesClient;
     private FusedLocationProviderClient fusedLocationProviderClient;
     private boolean locationPermissionGranted;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
@@ -59,8 +58,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final String KEY_LOCATION = "location";
     private Polygon main_mask;
     private List<LatLng> hole;
-    private boolean isMapReady = false;
-    private boolean isLocationReady = false;
     private double originLatitude;
     private double originLongitude;
 
@@ -321,12 +318,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     public void refreshHoles(){
-        // Remove previous polygon
+        // Remove outdated mask.
         if (main_mask != null) {
             main_mask.remove();
         }
 
-        // Build the base polygon (Taiwan boundary)
+        // Rebuild original mask as prototype.
         PolygonOptions polygonOptions = new PolygonOptions()
                 .add(
                         new LatLng(25.299655, 120.035032),
@@ -335,56 +332,38 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         new LatLng(25.299655, 122.007174))
                 .fillColor(0xFF00102E)
                 .strokeWidth(0);
-        // Add all hole rings
 
+        // Add all holes.
         List<List<LatLng>> holes = readHolesFromFile();
         for (List<LatLng> hole : holes) {
             polygonOptions.addHole(hole);
         }
 
-        // Create the polygon with holes
+        // Refresh the main mask to contain all holes.
         main_mask = map.addPolygon(polygonOptions);
     }
 
+    // Make new hole.
     public void addNewHoles(double lat, double lon){
-        // Make new hole.
-        // Use SharedPreferences to track first run
+        // Use SharedPreferences to track first run.
         SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
         boolean isFirstRun = prefs.getBoolean("is_first_run", true);
 
+        // First run creates a dummy starting hole that won't be saved.
         if (isFirstRun) {
-            makeHoleFromCenter(lat, lon);
+            makeFirstHole(lat, lon);
             makeToast("First run");
-            prefs.edit().putBoolean("is_first_run", false).apply();  // Mark as not first run anymore
+            prefs.edit().putBoolean("is_first_run", false).apply();  // Mark as not first run anymore.
         } else {
+            // Following runs create true, relatively grided holes.
             makeHoleFromEdges(lat, lon);
         }
 
-        // Remove previous polygon
-        if (main_mask != null) {
-            main_mask.remove();
-        }
-
-        // Build the base polygon (Taiwan boundary)
-        PolygonOptions polygonOptions = new PolygonOptions()
-                .add(
-                        new LatLng(25.299655, 120.035032),
-                        new LatLng(21.896799, 120.035032),
-                        new LatLng(21.896799, 122.007174),
-                        new LatLng(25.299655, 122.007174))
-                .fillColor(0xFF00102E)
-                .strokeWidth(0);
-        // Add all hole rings
-        List<List<LatLng>> holes = readHolesFromFile();
-        for (List<LatLng> hole : holes) {
-            polygonOptions.addHole(hole);
-        }
-
-        // Create the polygon with holes
-        main_mask = map.addPolygon(polygonOptions);
+        // Refresh the main mask with the new holes.
+        refreshHoles();
     }
 
-    public void makeHoleFromCenter(double lat, double lon){
+    public void makeFirstHole(double lat, double lon){
         hole = Arrays.asList(
                     new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
                     new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
@@ -393,6 +372,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             );
     }
 
+    // The algorithm to detect the direction the user is moving and create hole relative to the -
+    // - starting grid accordingly to avoid overlapping holes making unexpected results.
     public void makeHoleFromEdges(double lat, double lon){
         double resultLat = originLatitude;
         double resultLon = originLongitude;
@@ -424,16 +405,19 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 resultLon = originLongitude + SHOW_RADIUS * Math.ceil(deltaLon/SHOW_RADIUS);
             }
         }
+        // Formulate the new hole to be added.
         hole = Arrays.asList(
                 new LatLng(resultLat + SHOW_RADIUS, resultLon - SHOW_RADIUS),
                 new LatLng(resultLat + SHOW_RADIUS, resultLon + SHOW_RADIUS),
                 new LatLng(resultLat - SHOW_RADIUS, resultLon + SHOW_RADIUS),
                 new LatLng(resultLat - SHOW_RADIUS, resultLon - SHOW_RADIUS)
         );
-        // Save new hole.
+        // Save the center of the new hole.
         saveHoleToFile(resultLat, resultLon);
     }
 
+    // The algorithm to check whether or not the user has gone out of the bounds from any hole -
+    // - center recorded in the hole_coords file.
     public boolean checkOutside(double lat, double lon) {
         try {
             File file = new File(getFilesDir(), "hole_coordinates");
@@ -474,7 +458,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         StringBuilder data = new StringBuilder();
         data.append(lat).append(",").append(lon).append("\n");
         try {
-            // Use internal storage
+            // Use internal storage.
             File file = new File(getFilesDir(), "hole_coordinates");
             FileOutputStream fos = new FileOutputStream(file, true);
             fos.write(data.toString().getBytes());
@@ -485,6 +469,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    // Read holes from the dedicate file.
     private List<List<LatLng>> readHolesFromFile() {
         List<List<LatLng>> holeRings = new ArrayList<>();
         try {
@@ -497,7 +482,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     double lat = Double.parseDouble(parts[0]);
                     double lon = Double.parseDouble(parts[1]);
 
-                    // Create a square ring (hole) around the center point
+                    // Expand the hole from its center and store into a list.
                     List<LatLng> hole = Arrays.asList(
                             new LatLng(lat + SHOW_RADIUS, lon - SHOW_RADIUS),
                             new LatLng(lat + SHOW_RADIUS, lon + SHOW_RADIUS),
@@ -513,5 +498,17 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.e(TAG, "Error reading hole coordinates", e);
         }
         return holeRings;
+    }
+
+    // Use this method to add markers.
+    public void addMarker(String title, double latitude, double longitude) {
+        if (map != null) {
+            LatLng position = new LatLng(latitude, longitude);
+            map.addMarker(new com.google.android.gms.maps.model.MarkerOptions()
+                    .position(position)
+                    .title(title));
+        } else {
+            Log.e(TAG, "Map not ready yet.");
+        }
     }
 }
