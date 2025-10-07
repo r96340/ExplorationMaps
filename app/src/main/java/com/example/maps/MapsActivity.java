@@ -198,7 +198,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                         Toast.LENGTH_LONG).show();
                                 if(checkOutside(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude())){
                                     addNewHoles(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
-                                    makeToast("getDeviceLocation adds a new hole.");
                                 }
                                 map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                         new LatLng(lastKnownLocation.getLatitude(),
@@ -236,8 +235,24 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
+        if (locationPermissionGranted) {
+            LocationRequest locationRequest = LocationRequest.create();
+            locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+            locationRequest.setInterval(5000); // 5 seconds
+            locationRequest.setFastestInterval(2000); // Optional: limit how fast updates can come
+            try{
+                fusedLocationProviderClient.requestLocationUpdates(
+                        locationRequest,
+                        locationCallback,
+                        null // Use main looper
+                );
+            } catch (SecurityException e) {
+                throw new RuntimeException(e);
+            }
+        }
         updateLocationUI();
         getDeviceLocation();
+        refreshHoles();
     }
 
     /**
@@ -282,13 +297,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
         refreshHoles();
-        // Set default zoom when MyLocation button is clicked.
-        map.setOnMyLocationButtonClickListener(() -> {
-            getDeviceLocation();
-            return true; // Return true to consume the event.
-        });
-
         if (locationPermissionGranted) {
+            makeToast("Permission Granted");
             LocationRequest locationRequest = LocationRequest.create();
             locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
             locationRequest.setInterval(5000); // 5 seconds
@@ -303,6 +313,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 throw new RuntimeException(e);
             }
         }
+        // Set default zoom when MyLocation button is clicked.
+        map.setOnMyLocationButtonClickListener(() -> {
+            getDeviceLocation();
+            return true; // Return true to consume the event.
+        });
     }
 
     public void refreshHoles(){
@@ -339,6 +354,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         if (isFirstRun) {
             makeHoleFromCenter(lat, lon);
+            makeToast("First run");
             prefs.edit().putBoolean("is_first_run", false).apply();  // Mark as not first run anymore
         } else {
             makeHoleFromEdges(lat, lon);
@@ -375,36 +391,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     new LatLng(lat - SHOW_RADIUS, lon + SHOW_RADIUS),
                     new LatLng(lat - SHOW_RADIUS, lon - SHOW_RADIUS)
             );
-        // Save new hole.
-        saveHoleToFile(lat, lon);
-        originLatitude = lat;
-        originLongitude = lon;
-        try {
-            File file = new File(getFilesDir(), "hole_coordinates");
-            if (file.exists()) {
-                BufferedReader reader = new BufferedReader(new FileReader(file));
-                List<String> lines = new ArrayList<>();
-                String line;
-                boolean isFirstLine = true;
-                while ((line = reader.readLine()) != null) {
-                    if (isFirstLine) {
-                        isFirstLine = false; // Skip first line
-                        continue;
-                    }
-                    lines.add(line);
-                }
-                reader.close();
-
-                // Overwrite the file with remaining lines
-                FileOutputStream fos = new FileOutputStream(file, false); // false = overwrite
-                for (String remainingLine : lines) {
-                    fos.write((remainingLine + "\n").getBytes());
-                }
-                fos.close();
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "Error removing first line from hole_coordinates", e);
-        }
     }
 
     public void makeHoleFromEdges(double lat, double lon){
@@ -445,7 +431,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 new LatLng(resultLat - SHOW_RADIUS, resultLon - SHOW_RADIUS)
         );
         // Save new hole.
-        makeToast("Made hole at " + resultLat + ", " + resultLon);
         saveHoleToFile(resultLat, resultLon);
     }
 
